@@ -3,7 +3,10 @@ package com.mtwproject.backend.mtwprojectbackend.services;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Pageable;
+
 import com.mtwproject.backend.mtwprojectbackend.models.entities.Booking;
+import com.mtwproject.backend.mtwprojectbackend.models.entities.Driver;
 
 public interface BookingService {
 
@@ -26,4 +29,10 @@ public interface BookingService {
 
     List<Booking> findBookingsWithoutBill();
 
+    List<Booking> findBookingsByDriverAndPageable(Long idDriver, Pageable pageable);
+
+    Optional<Booking> findByDriverAndStatusIn(Driver driver, List<String> statuses);
+
+    List<Booking> findByDriverAndStatusInOrderByDateDescTimeDesc(Driver driver, List<String> statuses,
+            Pageable pageable);
 }

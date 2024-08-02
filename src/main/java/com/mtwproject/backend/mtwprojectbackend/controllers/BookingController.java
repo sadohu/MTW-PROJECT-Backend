@@ -1,9 +1,12 @@
 package com.mtwproject.backend.mtwprojectbackend.controllers;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +21,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.mtwproject.backend.mtwprojectbackend.models.dto.BookingDTO;
 import com.mtwproject.backend.mtwprojectbackend.models.entities.Booking;
+import com.mtwproject.backend.mtwprojectbackend.models.entities.Driver;
 import com.mtwproject.backend.mtwprojectbackend.services.BookingService;
 import com.mtwproject.backend.mtwprojectbackend.services.BookingServiceImpl;
 
@@ -299,6 +304,129 @@ public class BookingController {
         } catch (Exception e) {
             message.put("status", 500);
             message.put("message", "Se produjo un error al buscar las reservas sin facturas");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(message);
+        }
+    }
+
+    // listar reservas por idDriver y paginado
+    @GetMapping("driver/{idDriver}")
+    @ResponseBody
+    public ResponseEntity<?> findBookingsByDriverAndPageable(@PathVariable("idDriver") Long idDriver,
+            @RequestParam(name = "page", required = false, defaultValue = "0") int page,
+            @RequestParam(name = "size", required = false, defaultValue = "2") int size) {
+        HashMap<String, Object> message = new HashMap<>();
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            List<Booking> bookingList = bookingService.findBookingsByDriverAndPageable(idDriver, pageable);
+            if (bookingList.isEmpty()) {
+                message.put("status", 404);
+                message.put("message", "No se encontraron reservas");
+                return ResponseEntity.ok(message);
+            }
+            message.put("status", 200);
+            message.put("message", "Se encontraron reservas");
+            message.put("data", bookingList);
+            return ResponseEntity.ok(message);
+        } catch (Exception e) {
+            message.put("status", 500);
+            message.put("message", "Se produjo un error al buscar las reservas");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(message);
+        }
+    }
+
+    @GetMapping("active/{idDriver}")
+    public ResponseEntity<?> findByDriverAndActive(@PathVariable("idDriver") Long idDriver) {
+        HashMap<String, Object> message = new HashMap<>();
+
+        try {
+            List<String> statuses = new ArrayList<>();
+            statuses.add(BookingServiceImpl.PENDING_DRIVER_ASSIGNED_STATUS);
+            statuses.add(BookingServiceImpl.IN_PROCESS_STATUS);
+
+            Driver driver = new Driver();
+            driver.setIdDriver(idDriver);
+
+            Optional<Booking> booking = bookingService.findByDriverAndStatusIn(driver, statuses);
+
+            if (booking.isEmpty()) {
+                message.put("status", HttpStatus.NOT_FOUND.value());
+                message.put("message", "No se encontraron reservas en proceso");
+                return ResponseEntity.ok(message);
+            }
+
+            message.put("status", HttpStatus.OK.value());
+            message.put("message", "La reserva #" + booking.get().getIdBooking() + " se encuentra en proceso");
+            message.put("data", booking);
+            return ResponseEntity.ok(message);
+
+        } catch (Exception e) {
+            message.put("status", 500);
+            message.put("message", "Se produjo un error al buscar las reservas");
+            System.out.println(e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR.value()).body(message);
+        }
+    }
+
+    @GetMapping("completed/{idDriver}")
+    public ResponseEntity<?> findByDriverAndFinalized(@PathVariable("idDriver") Long idDriver,
+            @RequestParam(name = "page", required = false, defaultValue = "0") int page,
+            @RequestParam(name = "size", required = false, defaultValue = "2") int size) {
+        HashMap<String, Object> message = new HashMap<>();
+
+        try {
+            List<String> statuses = new ArrayList<>();
+            statuses.add(BookingServiceImpl.FINALIZED_STATUS);
+
+            Driver driver = new Driver();
+            driver.setIdDriver(idDriver);
+
+            Pageable pageable = PageRequest.of(page, size);
+
+            List<Booking> bookingList = bookingService.findByDriverAndStatusInOrderByDateDescTimeDesc(driver, statuses,
+                    pageable);
+
+            if (bookingList.isEmpty()) {
+                message.put("status", HttpStatus.NOT_FOUND.value());
+                message.put("message", "No se encontraron reservas");
+                return ResponseEntity.ok(message);
+            }
+
+            message.put("status", HttpStatus.OK.value());
+            message.put("message", "Se encontraron reservas");
+            message.put("data", bookingList);
+            return ResponseEntity.ok(message);
+
+        } catch (Exception e) {
+            message.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+            message.put("message", "Se produjo un error al buscar las reservas");
+            System.out.println(e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR.value()).body(message);
+        }
+    }
+
+    @PutMapping("updateStatus")
+    public ResponseEntity<?> updateStatus(@RequestBody BookingDTO bookingDTO) {
+        HashMap<String, Object> message = new HashMap<>();
+        try {
+            Optional<Booking> bookingFound = bookingService.findById(bookingDTO.getIdBooking());
+
+            if (bookingFound.isEmpty()) {
+                message.put("status", HttpStatus.NOT_FOUND.value());
+                message.put("message", "La reserva no existe");
+                return ResponseEntity.ok(message);
+            }
+
+            Booking booking = bookingFound.get();
+            booking.setStatus(bookingDTO.getStatus());
+            Booking bookingUpdated = bookingService.saveBooking(booking);
+
+            message.put("status", HttpStatus.OK.value());
+            message.put("message", "El estado de la reserva se ha actualizado correctamente");
+            message.put("data", bookingUpdated);
+            return ResponseEntity.ok(message);
+        } catch (Exception e) {
+            message.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+            message.put("message", "Se produjo un error al actualizar el estado de la reserva");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(message);
         }
     }
